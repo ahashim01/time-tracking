@@ -5,6 +5,6 @@ from rest_framework.authtoken import views
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api-token-auth/", views.obtain_auth_token),
-    path("user/", include("useraccount.urls")),
-    path("project/", include("project.urls")),
+    path("users/", include("useraccount.urls")),
+    path("projects/", include("project.urls")),
 ]
