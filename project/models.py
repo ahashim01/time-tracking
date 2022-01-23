@@ -25,7 +25,7 @@ class Task(models.Model):
 
     project = models.ForeignKey(Project, related_name="tasks", on_delete=models.CASCADE)
     title = models.CharField(max_length=255)
-    created_by = models.ForeignKey(User, related_name="tasks", on_delete=models.CASCADE)
+    user = models.ForeignKey(User, related_name="tasks", on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=CHOICES_STATUS, default="todo")
 
