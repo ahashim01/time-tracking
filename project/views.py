@@ -1,10 +1,12 @@
-from django.shortcuts import get_object_or_404
-from rest_framework import authentication, status, permissions, generics
+from datetime import datetime, timezone
+
+from rest_framework import authentication, generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from timetracking import permissions as custom_permissions
 
 from project import models, serializers
-from timetracking import permissions as custom_permissions
+
 
 # Project APIs
 class ProjectListCreateAPIView(generics.ListCreateAPIView):
@@ -85,3 +87,76 @@ class TaskRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
 
     def perform_update(self, serializer):
         serializer.save(user=self.request.user)
+
+
+class EntryStartAPIView(APIView):
+    authentication_classes = [authentication.TokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated, custom_permissions.IsAuthorized]
+    serializer_class = serializers.EntrySerializer
+
+    def post(self, request, pk):
+        """
+        API to start track a task.
+        """
+        user = request.user
+        task = user.tasks.get(id=pk)
+
+        # check if there is any tracked task
+        if user.entries.filter(is_tracked=True):
+            return Response(
+                {"message": "You already have a tracked task in progress."},
+                status=status.HTTP_200_OK,
+            )
+        entry = models.Entry.objects.create(
+            project=task.project,
+            task=task,
+            is_tracked=True,
+            created_by=user,
+            created_at=datetime.now(),
+        )
+        serializer = self.serializer_class(entry)
+        return Response(
+            {"status": "Start Tracking", "task": serializer.data},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class EntryEndAPIView(APIView):
+    authentication_classes = [authentication.TokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated, custom_permissions.IsAuthorized]
+    serializer_class = serializers.EntrySerializer
+
+    def post(self, request, pk):
+        """
+        API to end tracking a task
+        """
+        user = request.user
+        task = user.tasks.get(id=pk)
+        try:
+            entry = models.Entry.objects.get(
+                project=task.project,
+                task=task,
+                is_tracked=True,
+                created_by=request.user,
+            )
+        except models.Entry.DoesNotExist:
+            return Response(
+                {"message": "There is no tracked task with the provided data"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        tracked_minutes = int(
+            (datetime.now(timezone.utc) - entry.created_at).total_seconds() / 60
+        )
+
+        if tracked_minutes < 1:
+            tracked_minutes = 1
+
+        entry.minutes = tracked_minutes
+        entry.is_tracked = False
+        entry.save()
+        serializer = self.serializer_class(entry)
+        return Response(
+            {"status": "Stop Tracking", "task": serializer.data},
+            status=status.HTTP_200_OK,
+        )
